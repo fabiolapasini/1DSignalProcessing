@@ -4,7 +4,8 @@ import numpy as np
 import torch.nn as nn
 import torch.optim as optim
 
-from networks.models import SimpleSignalNet
+from networks.SimpleSignalNet import SimpleSignalNet
+from networks.PeakDetectionModel import PeakDetectionModel
 
 
 # ============================================================
