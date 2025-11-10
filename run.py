@@ -56,10 +56,10 @@ def prepare_dataset(args):
     print(f"[INFO] Train set: {len(train_dataset)} | Val set: {len(val_dataset)} | Test set: {len(test_dataset)}")
 
     # --- Iterate few batches to check shapes ---
-    for i, batch in enumerate(train_loader):
+    '''for i, batch in enumerate(train_loader):
         print(f"Train batch {i}: shape {batch.shape}")
         if i == 1:
-            break
+            break'''
 
     return train_loader, val_loader, test_loader
 
@@ -72,7 +72,11 @@ def main():
     train_loader, val_loader, test_loader = prepare_dataset(args)
     
     trainer = SignalTrainer(train_loader, val_loader)
-    trainer.train(epochs=100)
+    trainer.train(epochs=10)
+
+    # Save the model
+    # trainer.save_checkpoint("networks/checkpoints/model.pth")
+    # print("[INFO] Model saved to checkpoints/model.pth")
 
 
 if __name__ == "__main__":
