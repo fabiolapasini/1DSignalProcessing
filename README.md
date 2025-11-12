@@ -27,6 +27,10 @@ Each row represents a distinct 1D signal with varying amplitude, noise, and numb
 
 ```
 1DSignalProcessing/
+|
+├── data/
+│   ├── signal.raw            # Binary signal file
+│   ├── info.raw              # Metadata describing peaks
 │
 ├── dataloader/
 │   ├── SignalDataset.py      # Dataset loader and augmentation logic
@@ -34,17 +38,16 @@ Each row represents a distinct 1D signal with varying amplitude, noise, and numb
 ├── networks/
 │   ├── SimpleSignalNet.py    # Simple baseline model (MLP)
 │   ├── PeakDetectionModel.py # CNN-based peak detector
+|
+├── notebooks/
+│   ├── 1DSignalVisualization.ipynb
+│   ├── test_inference.ipynb
 │
 ├── trainer/
 |   # Training loop, validation, checkpointing, Custom combined loss (BCE + L1) Metrics tracking
 │   ├── SignalTrainer.py      
 │
-├── data/
-│   ├── signal.raw            # Binary signal file
-│   ├── info.raw              # Metadata describing peaks
-│
 ├── run.py                    # Main script to train and validate
-├── requirements.txt          # Dependencies
 └── README.md
 ```
 
