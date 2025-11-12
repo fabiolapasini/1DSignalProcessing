@@ -89,7 +89,7 @@ class SignalDataset(Dataset):
             peak_width[i] = float(info[4 + i * 3])
 
         return (
-            torch.from_numpy(signal),
+            torch.from_numpy(signal).float(),
             peak_pos,
             peak_height,
             peak_width

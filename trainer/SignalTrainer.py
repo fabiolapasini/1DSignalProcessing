@@ -9,6 +9,43 @@ from networks.PeakDetectionModel import PeakDetectionModel
 
 
 # ============================================================
+#  TESTER
+# ============================================================
+class SignalTester:
+    def __init__(self, model, device):
+        self.model = model.to(device)
+        self.device = device
+        self.criterion_pos = nn.BCELoss()
+        self.criterion_height = nn.L1Loss()
+        self.criterion_width = nn.L1Loss()
+
+    def test(self, dataloader):
+        self.model.eval()
+        test_loss = []
+
+        with torch.no_grad():
+            for signal, true_pos, true_height, true_width in dataloader:
+                signal = signal.to(self.device)
+                true_pos = true_pos.to(self.device)
+                true_height = true_height.to(self.device)
+                true_width = true_width.to(self.device)
+
+                pred_pos, pred_height, pred_width = self.model(signal.unsqueeze(1))
+
+                loss_p = self.criterion_pos(pred_pos, true_pos)
+                loss_h = self.criterion_height(pred_height, true_height)
+                loss_w = self.criterion_width(pred_width, true_width)
+
+                total_loss = loss_p + loss_h + loss_w
+                test_loss.append(total_loss.item())
+
+        mean_loss = np.mean(test_loss)
+        std_loss = np.std(test_loss)
+        print(f"Test Loss: {mean_loss:.5f} ± {std_loss:.5f}")
+        return mean_loss
+
+
+# ============================================================
 #  CUSTOM LOSS
 # ============================================================
 class SignalLoss(nn.Module):
@@ -59,12 +96,14 @@ class SignalMetrics:
 #  TRAINER
 # ============================================================
 class SignalTrainer:
-    def __init__(self, train_loader, val_loader=None, device=None, lr=1e-3, patience=5):
+    def __init__(self, device, train_loader, val_loader=None, lr=1e-3, patience=5):
         self.train_loader = train_loader
         self.val_loader = val_loader
-        self.device = device or ("cuda" if torch.cuda.is_available() else "cpu")
+        self.device = device
 
-        self.model = SimpleSignalNet(dropout=0.4).to(self.device)
+        # self.model = SimpleSignalNet(dropout=0.4).to(self.device)
+        self.model = PeakDetectionModel(dropout=0.4).to(self.device)
+
         self.criterion = SignalLoss()   # custom
         self.optimizer = optim.Adam(self.model.parameters(), lr=lr)
 
@@ -86,10 +125,11 @@ class SignalTrainer:
                 true_width = true_width.to(self.device)
 
                 # Forward
-                pred_pos, pred_height, pred_width = self.model(signal)
+                # pred_pos, pred_height, pred_width = self.model(signal)
+                pred_pos, pred_heights, pred_width = self.model(signal.unsqueeze(1))
 
                 # Compute loss
-                loss, loss_dict = self.criterion(pred_pos, pred_height, pred_width,
+                loss, loss_dict = self.criterion(pred_pos, pred_heights, pred_width,
                                                  true_pos, true_height, true_width)
 
                 # Backpropagation
@@ -140,7 +180,7 @@ class SignalTrainer:
                 true_height = true_height.to(self.device)
                 true_width = true_width.to(self.device)
 
-                pred_pos, pred_height, pred_width = self.model(signals)
+                pred_pos, pred_height, pred_width = self.model(signals.unsqueeze(1))
                 loss, loss_dict = self.criterion(pred_pos, pred_height, pred_width,
                                                  true_pos, true_height, true_width)
                 val_metrics.update(loss.item(), loss_dict)

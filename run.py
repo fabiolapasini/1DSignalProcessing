@@ -3,7 +3,7 @@ import torch
 from torch.utils.data import DataLoader, random_split
 
 from dataloader.SignalDataset import SignalDataset
-from trainer.SignalTrainer import SignalTrainer
+from trainer.SignalTrainer import SignalTrainer, SignalTester
 
 
 def argparse_config():
@@ -19,6 +19,7 @@ def argparse_config():
     parser.add_argument("--shuffle", action="store_true", help="Shuffle data in the DataLoader.")
     parser.add_argument("--train_split", type=float, default=0.75, help="Train split ratio.")
     parser.add_argument("--val_split", type=float, default=0.15, help="Validation split ratio.")
+    parser.add_argument("--test_inference", action="store_true", help="Run inference on the test set using a saved model checkpoint.")
     return parser.parse_args()
 
 
@@ -71,12 +72,19 @@ def main():
     # Prepare dataset
     train_loader, val_loader, test_loader = prepare_dataset(args)
     
-    trainer = SignalTrainer(train_loader, val_loader)
+    # Train
+    device = "cuda" if torch.cuda.is_available() else "cpu"
+    trainer = SignalTrainer(device, train_loader, val_loader)
     trainer.train(epochs=10)
 
+    # Inference
+    print("\nRunning test evaluation...")
+    tester = SignalTester(trainer.model, device)
+    tester.test(test_loader)
+
     # Save the model
-    # trainer.save_checkpoint("networks/checkpoints/model.pth")
-    # print("[INFO] Model saved to checkpoints/model.pth")
+    print("\nSaving the model...")
+    torch.save(tester.model.state_dict(), "model.pt")
 
 
 if __name__ == "__main__":

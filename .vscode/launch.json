@@ -17,10 +17,11 @@
                 "--chunks", "1024",
                 "--max_peaks", "3",
                 "--augment",
-                "--batch_size", "64",
+                "--batch_size", "32",
                 "--shuffle",
                 "--train_split", "0.75",
-                "--val_split", "0.15"
+                "--val_split", "0.15",
+                "--test_inference"
             ]
         }
     ]
