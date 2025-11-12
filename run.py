@@ -19,7 +19,6 @@ def argparse_config():
     parser.add_argument("--shuffle", action="store_true", help="Shuffle data in the DataLoader.")
     parser.add_argument("--train_split", type=float, default=0.75, help="Train split ratio.")
     parser.add_argument("--val_split", type=float, default=0.15, help="Validation split ratio.")
-    parser.add_argument("--test_inference", action="store_true", help="Run inference on the test set using a saved model checkpoint.")
     return parser.parse_args()
 
 
