@@ -4,10 +4,10 @@ import torch.optim as optim
 
 
 class SimpleSignalNet(nn.Module):
-    def __init__(self, input_size=1024, hidden_size=256, dropout=0.3):
+    def __init__(self, signal_length=1024, hidden_size=256, dropout=0.3):
         super().__init__()
         self.net = nn.Sequential(
-            nn.Linear(input_size, hidden_size),
+            nn.Linear(signal_length, hidden_size),
             nn.ReLU(),
             nn.Dropout(dropout),
             nn.Linear(hidden_size, hidden_size // 2),
@@ -15,7 +15,7 @@ class SimpleSignalNet(nn.Module):
             nn.Dropout(dropout),
         )
         # Output layer
-        self.pos_head = nn.Linear(hidden_size // 2, input_size)
+        self.pos_head = nn.Linear(hidden_size // 2, signal_length)
         self.height_head = nn.Linear(hidden_size // 2, 3)
         self.width_head = nn.Linear(hidden_size // 2, 3)
 
