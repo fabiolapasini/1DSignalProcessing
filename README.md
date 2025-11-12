@@ -19,7 +19,7 @@ Below is a sample of raw signals from the dataset (`.raw` format):
   <img src="signals.png" alt="Signal Samples" width="800"/>
 </p>
 
-Each row represents a distinct 1D signal with varying amplitude, noise, and number of peaks.  
+Each row represents a distinct 1D signal with varying amplitude, noise, and number of peaks.The dataset has been augmented by vertically flipping some signals to increase diversity.
 
 ---
 
@@ -82,13 +82,15 @@ python run.py     --signal_path data/signal.raw     --info_path data/info.raw   
 
 ```json
 "args": [
-    "--signal_path", "../data/signal.raw",
-    "--info_path", "../data/info.raw",
-    "--chunks", "1024",
-    "--max_peaks", "3",
-    "--augment",
-    "--batch_size", "64",
-    "--shuffle"
+   "--signal_path", "data/signal.raw",
+   "--info_path", "data/info.raw",
+   "--chunks", "1024",
+   "--max_peaks", "3",
+   "--augment",
+   "--batch_size", "32",
+   "--shuffle",
+   "--train_split", "0.75",
+   "--val_split", "0.15",
 ]
 ```
 
@@ -123,7 +125,8 @@ During training, the best model is automatically saved in:
 networks/checkpoints/best_model_epochX.pth
 ```
 
-If the directory doesn’t exist, it is created automatically.
+If the directory doesn’t exist, it is created automatically.\
+In the same dir, **model.pt** is also saved.
 
 ---
 
@@ -131,14 +134,13 @@ If the directory doesn’t exist, it is created automatically.
 
 - Add TensorBoard integration  
 - Implement attention-based architectures  
-- Extend dataset parsing for multi-channel signals  
 - Improve data normalization and scaling
 
 ---
 
 ## 👨‍💻 Author
 
-**Fabio Lapasini**  
+**Fabio Pasini**  
 💡 [GitHub Profile](https://github.com/fabiolapasini)  
 📧 fabiola.pasini@hotmail.it
 
