@@ -21,7 +21,6 @@
                 "--shuffle",
                 "--train_split", "0.75",
                 "--val_split", "0.15",
-                "--test_inference"
             ]
         }
     ]
