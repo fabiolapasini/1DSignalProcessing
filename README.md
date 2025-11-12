@@ -125,8 +125,13 @@ During training, the best model is automatically saved in:
 networks/checkpoints/best_model_epochX.pth
 ```
 
-If the directory doesn’t exist, it is created automatically.\
 In the same dir, **model.pt** is also saved.
+```
+networks/checkpoints/model.pt
+```
+
+If the directory doesn’t exist, it is created automatically.\
+
 
 ---
 
