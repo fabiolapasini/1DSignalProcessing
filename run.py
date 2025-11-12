@@ -1,5 +1,6 @@
 import argparse
 import torch
+import os 
 from torch.utils.data import DataLoader, random_split
 
 from dataloader.SignalDataset import SignalDataset
@@ -74,7 +75,7 @@ def main():
     # Train
     device = "cuda" if torch.cuda.is_available() else "cpu"
     trainer = SignalTrainer(device, train_loader, val_loader)
-    trainer.train(epochs=10)
+    trainer.train(epochs=20)
 
     # Inference
     print("\nRunning test evaluation...")
@@ -82,8 +83,14 @@ def main():
     tester.test(test_loader)
 
     # Save the model
+    checkpoint_dir = "networks\\checkpoints"
+    checkpoint_path = os.path.join(checkpoint_dir, "model.pt")
+
+    os.makedirs(checkpoint_dir, exist_ok=True)
+
     print("\nSaving the model...")
-    torch.save(tester.model.state_dict(), "model.pt")
+    torch.save(tester.model.state_dict(), checkpoint_path)
+    print(f"Model saved at {checkpoint_path}")
 
 
 if __name__ == "__main__":
