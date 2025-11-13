@@ -96,7 +96,7 @@ class SignalMetrics:
 #  TRAINER
 # ============================================================
 class SignalTrainer:
-    def __init__(self, device, train_loader, val_loader=None, lr=1e-3, patience=15):
+    def __init__(self, device, train_loader, val_loader=None, lr=1e-3, patience=7):
         self.train_loader = train_loader
         self.val_loader = val_loader
         self.device = device
