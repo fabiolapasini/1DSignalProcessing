@@ -75,7 +75,7 @@ def main():
     # Train
     device = "cuda" if torch.cuda.is_available() else "cpu"
     trainer = SignalTrainer(device, train_loader, val_loader)
-    trainer.train(epochs=20)
+    trainer.train(epochs=10)
 
     # Inference
     print("\nRunning test evaluation...")
