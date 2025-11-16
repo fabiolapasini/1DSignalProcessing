@@ -7,25 +7,16 @@ import torch.nn as nn
 import torch.optim as optim
 from datetime import datetime
 
-from networks.SimpleSignalNet import SimpleSignalNet
 from networks.PeakDetectionModel import PeakDetectionModel
 from sklearn.metrics import precision_score, recall_score, f1_score
 
 
-# ============================================================
-#  CUSTOM LOSS
-# ============================================================
 class SignalLoss(nn.Module):
-    """
-    Multiple losses:
-    - BCE for peak position
-    - L1 (MAE) for height and width
-    """
-    def __init__(self, w_pos=1.0, w_height=1.0, w_width=1.0):
+    def __init__(self, w_pos=10.0, w_height=0.1, w_width=0.5):
         super().__init__()
         self.pos_loss = nn.BCELoss()
-        self.height_loss = nn.L1Loss()
-        self.width_loss = nn.L1Loss()
+        self.height_loss = nn.MSELoss()
+        self.width_loss = nn.MSELoss()
         self.w_pos = w_pos
         self.w_height = w_height
         self.w_width = w_width
@@ -38,9 +29,6 @@ class SignalLoss(nn.Module):
         return total, {"pos": loss_p.item(), "height": loss_h.item(), "width": loss_w.item()}
     
 
-# ============================================================
-#  METRICS
-# ============================================================
 class SignalMetrics:
     def __init__(self):
         self.reset()
@@ -73,14 +61,11 @@ class SignalMetrics:
         return mean_loss, mean_details, mean_precision, mean_recall, mean_f1
 
 
-# ============================================================
-#  TESTER
-# ============================================================
 class SignalTester:
-    def __init__(self, model, device, threshold=0.5):
+    def __init__(self, model, device, threshold=0.3):
         self.model = model.to(device)
         self.device = device
-        self.criterion = SignalLoss()
+        self.criterion = SignalLoss(w_pos=10.0, w_height=0.1, w_width=0.5)
         self.threshold = threshold
     
     def test(self, dataloader):
@@ -89,7 +74,6 @@ class SignalTester:
         
         all_pred_pos = []
         all_true_pos = []
-        
         with torch.no_grad():
             for signal, true_pos, true_height, true_width in dataloader:
                 signal = signal.to(self.device)
@@ -115,30 +99,24 @@ class SignalTester:
         f1 = f1_score(true_flat, pred_flat, zero_division=0)
         
         avg_loss, avg_details, _, _, _ = test_metrics.avg()
-        
-        print(f"\n{'='*60}")
+
         print(f"[TEST RESULTS]")
-        print(f"{'='*60}")
         print(f"Loss: {avg_loss:.4f} (pos={avg_details['pos']:.4f}, h={avg_details['height']:.4f}, w={avg_details['width']:.4f})")
         print(f"Precision: {precision:.4f} | Recall: {recall:.4f} | F1: {f1:.4f}")
-        print(f"{'='*60}\n")
-        
+
         return avg_loss, precision, recall, f1
 
 
-# ============================================================
-#  TRAINER
-# ============================================================
 class SignalTrainer:
-    def __init__(self, device, train_loader, val_loader=None, lr=1e-3, patience=7, threshold=0.5):
+    def __init__(self, device, train_loader, val_loader=None, lr=5e-4, patience=7, threshold=0.3):
         self.train_loader = train_loader
         self.val_loader = val_loader
         self.device = device
         self.threshold = threshold
 
-        self.model = PeakDetectionModel(dropout=0.4).to(self.device)
+        self.model = PeakDetectionModel(dropout=0.2).to(self.device)
 
-        self.criterion = SignalLoss()
+        self.criterion = SignalLoss(w_pos=10.0, w_height=0.1, w_width=0.5)
         self.optimizer = optim.Adam(self.model.parameters(), lr=lr)
         self.scheduler = optim.lr_scheduler.ReduceLROnPlateau(
             self.optimizer, mode='min', factor=0.5, patience=3
@@ -165,10 +143,8 @@ class SignalTrainer:
         for epoch in range(1, epochs + 1):
             epoch_start = time.time()
             
-            # Training phase
             train_loss, train_f1 = self._train_epoch(epoch)
             
-            # Validation phase
             if self.val_loader:
                 val_loss, val_precision, val_recall, val_f1 = self._validate_epoch(epoch)
                 
@@ -192,11 +168,11 @@ class SignalTrainer:
                     print(f"Early stop patience: {self.early_stop_counter}/{self.patience}")
                     
                     if self.early_stop_counter >= self.patience:
-                        print(f"\n🛑 Early stopping triggered at epoch {epoch}")
+                        print(f"\nEarly stopping triggered at epoch {epoch}")
                         break
             
             epoch_time = time.time() - epoch_start
-            print(f"⏱Epoch {epoch} completed in {epoch_time:.2f}s\n")
+            print(f"Epoch {epoch} completed in {epoch_time:.2f}s\n")
         
         print(f"Best validation loss: {self.best_val_loss:.4f}")
         print(f"Best validation F1: {self.best_val_f1:.4f}")
@@ -239,7 +215,7 @@ class SignalTrainer:
         true_flat = np.concatenate(all_true_pos).flatten()
         train_f1 = f1_score(true_flat, pred_flat, zero_division=0)
         
-        print(f"\n📊 Epoch {epoch} | Train Loss: {avg_loss:.4f} | F1: {train_f1:.4f}")
+        print(f"\n Epoch {epoch} | Train Loss: {avg_loss:.4f} | F1: {train_f1:.4f}")
         print(f"   └─ pos={avg_details['pos']:.4f}, h={avg_details['height']:.4f}, w={avg_details['width']:.4f}")
         
         return avg_loss, train_f1
@@ -276,7 +252,7 @@ class SignalTrainer:
         recall = recall_score(true_flat, pred_flat, zero_division=0)
         f1 = f1_score(true_flat, pred_flat, zero_division=0)
         
-        print(f"✅ Epoch {epoch} | Val Loss: {avg_loss:.4f} | Precision: {precision:.4f} | Recall: {recall:.4f} | F1: {f1:.4f}")
+        print(f"Epoch {epoch} | Val Loss: {avg_loss:.4f} | Precision: {precision:.4f} | Recall: {recall:.4f} | F1: {f1:.4f}")
         print(f"   └─ pos={avg_details['pos']:.4f}, h={avg_details['height']:.4f}, w={avg_details['width']:.4f}")
         
         return avg_loss, precision, recall, f1

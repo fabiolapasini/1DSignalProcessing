@@ -17,7 +17,7 @@ def argparse_config():
     parser.add_argument("--train_split", type=float, default=0.75, help="Train split ratio.")
     parser.add_argument("--val_split", type=float, default=0.15, help="Validation split ratio.")
     parser.add_argument("--normalize", action="store_true", help="Enable signal normalization.")
-    parser.add_argument("--epochs", type=int, default=20, help="Number of training epochs.")
+    parser.add_argument("--epochs", type=int, default=15, help="Number of training epochs.")
     parser.add_argument("--lr", type=float, default=1e-3, help="Learning rate.")
     parser.add_argument("--patience", type=int, default=7, help="Early stopping patience.")
     parser.add_argument("--dropout", type=float, default=0.4, help="Dropout rate for the model.")
@@ -53,7 +53,7 @@ def prepare_dataset(args):
     train_dataset, val_dataset, test_dataset = random_split(
         dataset,
         [train_size, val_size, test_size],
-        generator=torch.Generator().manual_seed(args.seed)
+        generator=torch.Generator().manual_seed(42)
     )
     
     train_loader = DataLoader(train_dataset, batch_size=args.batch_size, shuffle=True, num_workers=0)
@@ -87,9 +87,7 @@ def main():
     print(f"[INFO] Training with lr={args.lr}, patience={args.patience}, epochs={args.epochs}")
     trainer.train(epochs=args.epochs)
     
-    print("\n" + "="*50)
     print("Running test evaluation...")
-    print("="*50)
     tester = SignalTester(trainer.model, device)
     tester.test(test_loader)
     
@@ -98,9 +96,7 @@ def main():
         os.makedirs(checkpoint_dir)
     checkpoint_path = os.path.join(checkpoint_dir, "final_model.pt")
     
-    print("\n" + "="*50)
     print("Saving the final model...")
-    print("="*50)
     torch.save(trainer.model.state_dict(), checkpoint_path)
     print(f"✅ Model saved at {checkpoint_path}")
 
