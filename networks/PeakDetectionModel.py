@@ -7,6 +7,34 @@ import torch.optim as optim
 class PeakDetectionModel(nn.Module):
     def __init__(self, signal_length=1024, max_peaks=3, dropout=0.3):
         super(PeakDetectionModel, self).__init__()
+        self.conv1 = nn.Conv1d(1, 32, kernel_size=13)   # kernel size 13 as max width of peak is 10
+        self.conv2 = nn.Conv1d(32, 64, kernel_size=13)
+
+        self.pool = nn.MaxPool1d(kernel_size=2, ceil_mode=True)
+        self.sigmoid = nn.Sigmoid()
+        self.fc1 = nn.Linear((64 * 500), 2048)
+        # self.fc_num_peaks = nn.Linear(64, 1)
+        self.fc_positions = nn.Linear(2048, signal_length)
+        self.fc_heights = nn.Linear(2048, max_peaks)
+        self.fc_width = nn.Linear(2048, max_peaks)
+
+    def forward(self, x):
+        x = torch.relu(self.conv1(x))
+        x = torch.relu(self.conv2(x))
+        x = self.pool(x)
+        x = x.view(x.shape[0], -1)
+        x = torch.relu(self.fc1(x))
+        # num_peaks = self.fc_num_peaks(x)
+        positions = self.sigmoid(self.fc_positions(x))
+        heights = torch.relu(self.fc_heights(x))
+        width = torch.relu(self.fc_width(x))
+        return positions, heights, width
+
+
+
+'''class PeakDetectionModel(nn.Module):
+    def __init__(self, signal_length=1024, max_peaks=3, dropout=0.3):
+        super(PeakDetectionModel, self).__init__()
         self.signal_length = signal_length
         self.max_peaks = max_peaks
         
@@ -69,7 +97,7 @@ class PeakDetectionModel(nn.Module):
         widths = torch.relu(self.fc_width(x))
         
         return positions, heights, widths
-
+'''
 
 
 

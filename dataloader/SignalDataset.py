@@ -3,21 +3,9 @@ import torch
 from torch.utils.data import Dataset
 
 class SignalDataset(Dataset):
-    """
-    PyTorch Dataset per il caricamento e l'augmentazione dei segnali
-    da file binari (.raw) e delle corrispondenti info.
-    """
     def __init__(self, signal_path: str, info_path: str,
                  chunks: int = 1024, max_peaks: int = 3,
                  normalize: bool = False):
-        """
-        Parameters:
-            signal_path (str): Path to the signal binary file.
-            info_path (str): Path to the info binary file.
-            chunks (int): Signal length per sample.
-            max_peaks (int): Maximum number of peaks parsed from info.
-            normalize (bool): Whether to normalize signals using global statistics.
-        """
         self.signal_path = signal_path
         self.info_path = info_path
         self.chunks = chunks
@@ -37,22 +25,18 @@ class SignalDataset(Dataset):
             self.signal_mean = 0.0
             self.signal_std = 1.0
     
-    # ------------------------- DATA LOADING -------------------------
     def _load_signals(self) -> np.ndarray:
-        """Load raw signal data and reshape into chunks."""
         with open(self.signal_path, "rb") as f:
             signal_data = np.fromfile(f, dtype=np.uint8)
             signal_data = signal_data.reshape(-1, self.chunks).astype(np.float32)
         return signal_data
     
     def _load_info(self) -> np.ndarray:
-        """Load raw info data."""
         with open(self.info_path, "rb") as f:
             info_data = np.fromfile(f, dtype=np.float32)
             info_data = info_data.reshape(-1, 11).astype(np.float32)
         return info_data
     
-    # ------------------------- PYTORCH API -------------------------
     def __len__(self):
         return len(self.signal_data)
     
@@ -60,7 +44,6 @@ class SignalDataset(Dataset):
         signal = self.signal_data[idx].copy()
         info = self.info_data[idx].copy()
         
-        # Z-score norm
         if self.normalize:
             signal = (signal - self.signal_mean) / (self.signal_std + 1e-8)
         
