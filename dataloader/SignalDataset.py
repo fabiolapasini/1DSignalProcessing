@@ -4,26 +4,17 @@ from torch.utils.data import Dataset
 
 class SignalDataset(Dataset):
     def __init__(self, signal_path: str, info_path: str,
-                 chunks: int = 1024, max_peaks: int = 3,
-                 normalize: bool = False):
+                 chunks: int = 1024, max_peaks: int = 3):
         self.signal_path = signal_path
         self.info_path = info_path
         self.chunks = chunks
         self.max_peaks = max_peaks
-        self.normalize = normalize
         
         self.signal_data = self._load_signals()
         self.info_data = self._load_info()
         
-        assert len(self.signal_data) == len(self.info_data), \
-            f"Mismatch: {len(self.signal_data)} signals vs {len(self.info_data)} infos"
-        
-        if self.normalize:
-            self.signal_mean = self.signal_data.mean()
-            self.signal_std = self.signal_data.std()
-        else:
-            self.signal_mean = 0.0
-            self.signal_std = 1.0
+        self.signal_mean = 0.0
+        self.signal_std = 1.0
     
     def _load_signals(self) -> np.ndarray:
         with open(self.signal_path, "rb") as f:
@@ -43,9 +34,6 @@ class SignalDataset(Dataset):
     def __getitem__(self, idx):
         signal = self.signal_data[idx].copy()
         info = self.info_data[idx].copy()
-        
-        if self.normalize:
-            signal = (signal - self.signal_mean) / (self.signal_std + 1e-8)
         
         num_peaks = min(int(info[1]), self.max_peaks) 
         peak_pos = torch.zeros(self.chunks, dtype=torch.float32)

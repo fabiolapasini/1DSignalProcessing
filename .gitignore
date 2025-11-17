@@ -1,5 +1,9 @@
 task_covisionlab.pdf
 .venv
-network/__pycache__
-dataloader/__pycache__
-trainer/__pycache__
+
+network/checkpoints/*
+network/history/*
+
+__pycache__/
+*.py[cod]
+*$py.class

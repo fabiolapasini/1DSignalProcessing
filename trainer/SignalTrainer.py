@@ -11,7 +11,14 @@ from networks.PeakDetectionModel import PeakDetectionModel
 from sklearn.metrics import precision_score, recall_score, f1_score
 
 
+# ============================================================
+#  LOSS
+# ============================================================
 class SignalLoss(nn.Module):
+    """
+    Combined loss function for peak detection with weighted components:
+    BCE for position classification, MSE for height and width regression.
+    """
     def __init__(self, w_pos=10.0, w_height=0.1, w_width=0.5):
         super().__init__()
         self.pos_loss = nn.BCELoss()
@@ -29,7 +36,14 @@ class SignalLoss(nn.Module):
         return total, {"pos": loss_p.item(), "height": loss_h.item(), "width": loss_w.item()}
     
 
+# ============================================================
+#  METRICS
+# ============================================================
 class SignalMetrics:
+    """
+    Accumulates and computes average metrics during training/validation.
+    Tracks total loss, individual loss components, and classification metrics (precision, recall, F1).
+    """
     def __init__(self):
         self.reset()
 
@@ -61,6 +75,9 @@ class SignalMetrics:
         return mean_loss, mean_details, mean_precision, mean_recall, mean_f1
 
 
+# ============================================================
+#  TESTER
+# ============================================================
 class SignalTester:
     def __init__(self, model, device, threshold=0.3):
         self.model = model.to(device)
@@ -107,8 +124,11 @@ class SignalTester:
         return avg_loss, precision, recall, f1
 
 
+# ============================================================
+#  TRAINER
+# ============================================================
 class SignalTrainer:
-    def __init__(self, device, train_loader, val_loader=None, lr=5e-4, patience=7, threshold=0.3):
+    def __init__(self, device, train_loader, val_loader=None, lr=0.001, patience=7, threshold=0.3):
         self.train_loader = train_loader
         self.val_loader = val_loader
         self.device = device
@@ -116,7 +136,9 @@ class SignalTrainer:
 
         self.model = PeakDetectionModel(dropout=0.2).to(self.device)
 
-        self.criterion = SignalLoss(w_pos=10.0, w_height=0.1, w_width=0.5)
+        # self.criterion = SignalLoss(w_pos=10.0, w_height=0.1, w_width=0.5)
+        self.criterion = SignalLoss(w_pos=5.0, w_height=0.2, w_width=0.5)
+
         self.optimizer = optim.Adam(self.model.parameters(), lr=lr)
         self.scheduler = optim.lr_scheduler.ReduceLROnPlateau(
             self.optimizer, mode='min', factor=0.5, patience=3
