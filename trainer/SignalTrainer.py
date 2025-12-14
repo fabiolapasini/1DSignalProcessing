@@ -134,7 +134,7 @@ class SignalTrainer:
         self.device = device
         self.threshold = threshold
 
-        self.model = PeakDetectionModel(dropout=0.2).to(self.device)
+        self.model = PeakDetectionModel().to(self.device)
 
         # self.criterion = SignalLoss(w_pos=10.0, w_height=0.1, w_width=0.5)
         self.criterion = SignalLoss(w_pos=5.0, w_height=0.2, w_width=0.5)
