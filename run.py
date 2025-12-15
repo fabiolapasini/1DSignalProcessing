@@ -25,7 +25,6 @@ def prepare_dataset(args):
     dataset = SignalDataset(
         signal_path=args.signal_path,
         info_path=args.info_path,
-        chunks=args.chunks,
         max_peaks=args.max_peaks,
     )
     print(f"[INFO] Dataset loaded with {len(dataset)} signals")

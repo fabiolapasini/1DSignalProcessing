@@ -1,46 +1,64 @@
 import torch
 import torch.nn as nn
 
-
 class PeakDetectionModel(nn.Module):
-    """
-    1D CNN for peak detection in signals.
-    Predicts peak positions (binary per sample), heights, and widths for up to max_peaks.
-    """
-    def __init__(self, signal_length=1024, max_peaks=3, dropout=0.3):
+    def __init__(self, max_signal_length=1024, n_anchors=1):
         super(PeakDetectionModel, self).__init__()
-        self.signal_length = signal_length
-        self.max_peaks = max_peaks
+        self.max_signal_length = max_signal_length
+        self.n_anchors = n_anchors
         
+        # Encoder condiviso
         self.encoder = nn.Sequential(
-            nn.Conv1d(1, 32, kernel_size=13),
+            # Input shape: (b, 1, 1024)
+            nn.Conv1d(in_channels=1, out_channels=32, kernel_size=3, padding=1),
             nn.ReLU(),
-            nn.Conv1d(32, 64, kernel_size=13),
+            nn.MaxPool1d(kernel_size=2),
+            # Output shape: (b, 32, 512)
+            
+            nn.Conv1d(in_channels=32, out_channels=64, kernel_size=3, padding=1),
             nn.ReLU(),
-            nn.MaxPool1d(kernel_size=2, ceil_mode=True),
+            nn.MaxPool1d(kernel_size=2),
+            # Output shape: (b, 64, 256)
+            
+            nn.Conv1d(in_channels=64, out_channels=64, kernel_size=3, padding=1),
+            nn.ReLU(),
+            nn.MaxPool1d(kernel_size=2),
+            # Output shape: (b, 64, 128)
+            
+            nn.Conv1d(in_channels=64, out_channels=128, kernel_size=3, padding=1),
+            nn.ReLU(),
+            nn.MaxPool1d(kernel_size=2),
+            # Output shape: (b, 128, 64)
+            
+            nn.Conv1d(in_channels=128, out_channels=128, kernel_size=3, padding=1),
+            nn.ReLU(),
+            nn.MaxPool1d(kernel_size=2),
+            # Output shape: (b, 128, 32)
         )
         
-        with torch.no_grad():
-            dummy = torch.zeros(1, 1, signal_length)
-            out = self.encoder(dummy)
-            flatten_dim = out.view(1, -1).shape[1]
-        
-        self.fc = nn.Sequential(
-            nn.Linear(flatten_dim, 2048),
-            nn.ReLU()
+        # Output heads separati
+        self.output_positions = nn.Sequential(
+            nn.Conv1d(in_channels=128, out_channels=n_anchors, kernel_size=3, padding=1),
+            nn.Sigmoid()
         )
         
-        self.fc_positions = nn.Linear(2048, signal_length)
-        self.fc_heights = nn.Linear(2048, max_peaks)
-        self.fc_widths = nn.Linear(2048, max_peaks)
+        self.output_heights = nn.Sequential(
+            nn.Conv1d(in_channels=128, out_channels=n_anchors, kernel_size=3, padding=1),
+            nn.Sigmoid()
+        )
+        
+        self.output_widths = nn.Sequential(
+            nn.Conv1d(in_channels=128, out_channels=n_anchors, kernel_size=3, padding=1),
+            nn.Sigmoid()
+        )
     
     def forward(self, x):
+        # Input: (batch, 1, 1024)
         x = self.encoder(x)
-        x = x.view(x.shape[0], -1)
-        x = self.fc(x)
+        # x shape: (batch, 128, 32)
         
-        positions = torch.sigmoid(self.fc_positions(x))
-        heights = torch.relu(self.fc_heights(x))
-        widths = torch.relu(self.fc_widths(x))
+        positions = self.output_positions(x) 
+        heights = self.output_heights(x)      
+        widths = self.output_widths(x) 
         
         return positions, heights, widths

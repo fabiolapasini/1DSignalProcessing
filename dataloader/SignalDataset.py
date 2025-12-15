@@ -2,55 +2,50 @@ import numpy as np
 import torch
 from torch.utils.data import Dataset
 
+
 class SignalDataset(Dataset):
-    def __init__(self, signal_path: str, info_path: str,
-                 chunks: int = 1024, max_peaks: int = 3):
+    def __init__(
+        self,
+        signal_path: str,
+        info_path: str,
+        max_signal_length: int = 1024,
+        max_peaks: int = 3
+    ):
         self.signal_path = signal_path
         self.info_path = info_path
-        self.chunks = chunks
+        self.max_signal_length = max_signal_length
         self.max_peaks = max_peaks
-        
+
         self.signal_data = self._load_signals()
         self.info_data = self._load_info()
-        
-        self.signal_mean = 0.0
-        self.signal_std = 1.0
-    
+
     def _load_signals(self) -> np.ndarray:
         with open(self.signal_path, "rb") as f:
-            signal_data = np.fromfile(f, dtype=np.uint8)
-            signal_data = signal_data.reshape(-1, self.chunks).astype(np.float32)
-        return signal_data
-    
+            data = np.fromfile(f, dtype=np.uint8)
+            data = data.reshape(-1, self.max_signal_length)
+        return data
+
     def _load_info(self) -> np.ndarray:
         with open(self.info_path, "rb") as f:
-            info_data = np.fromfile(f, dtype=np.float32)
-            info_data = info_data.reshape(-1, 11).astype(np.float32)
-        return info_data
-    
+            data = np.fromfile(f, dtype=np.float32)
+            data = data.reshape(-1, 2 + self.max_peaks * 3)
+        return data
+
     def __len__(self):
         return len(self.signal_data)
-    
+
     def __getitem__(self, idx):
-        signal = self.signal_data[idx].copy()
-        info = self.info_data[idx].copy()
-        
-        num_peaks = min(int(info[1]), self.max_peaks) 
-        peak_pos = torch.zeros(self.chunks, dtype=torch.float32)
-        peak_height = torch.zeros(self.max_peaks, dtype=torch.float32)
-        peak_width = torch.zeros(self.max_peaks, dtype=torch.float32)
-        
-        for i in range(num_peaks):
-            pos = int(round(info[2 + i * 3])) 
-            if 0 <= pos < self.chunks:
-                peak_pos[pos] = 1.0
-            
-            peak_height[i] = float(info[3 + i * 3])
-            peak_width[i] = float(info[4 + i * 3])
-        
-        return (
-            torch.from_numpy(signal).float(),
-            peak_pos,
-            peak_height,
-            peak_width
-        )
+        info = self.info_data[idx]
+        raw_signal = self.signal_data[idx]
+
+        signal_length = int(info[0])
+        n_peaks = int(info[1])
+
+        signal = raw_signal[:signal_length].astype(np.float32)
+        peaks = info[2:].reshape(self.max_peaks, 3)[:n_peaks]
+
+        return {
+            "signal": torch.from_numpy(signal),
+            "peaks": torch.from_numpy(peaks)
+        }
+
