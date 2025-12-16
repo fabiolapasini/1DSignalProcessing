@@ -2,7 +2,7 @@ import argparse
 import torch
 import os 
 from torch.utils.data import DataLoader, random_split
-from dataloader.SignalDataset import SignalDataset
+from dataloader.SignalDataset import SignalDataset, collate_fn
 from trainer.SignalTrainer import SignalTrainer, SignalTester
 
 def argparse_config():
@@ -39,9 +39,9 @@ def prepare_dataset(args):
         generator=torch.Generator().manual_seed(42)
     )
     
-    train_loader = DataLoader(train_dataset, batch_size=args.batch_size, shuffle=True, num_workers=0)
-    val_loader = DataLoader(val_dataset, batch_size=args.batch_size, shuffle=False, num_workers=0)
-    test_loader = DataLoader(test_dataset, batch_size=args.batch_size, shuffle=False, num_workers=0)
+    train_loader = DataLoader(train_dataset, batch_size=args.batch_size, shuffle=True, num_workers=0, collate_fn=collate_fn)
+    val_loader = DataLoader(val_dataset, batch_size=args.batch_size, shuffle=False, num_workers=0, collate_fn=collate_fn)
+    test_loader = DataLoader(test_dataset, batch_size=args.batch_size, shuffle=False, num_workers=0, collate_fn=collate_fn)
     
     print(f"[INFO] Train set: {len(train_dataset)} | Val set: {len(val_dataset)} | Test set: {len(test_dataset)}")
     return train_loader, val_loader, test_loader

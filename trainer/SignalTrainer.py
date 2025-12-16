@@ -49,51 +49,44 @@ class SignalMetrics:
         self.anchors = anchors
         self.iou_thresh = iou_thresh
         self.reset()
-
+    
     def reset(self):
         self.tp = 0.0
         self.fp = 0.0
-
+    
     @torch.no_grad()
     def update(self, true, pred):
-        # true, pred: (B, N, 3)
+        if true.dim() == 4:
+            true = true.squeeze(1)
+            pred = pred.squeeze(1)
+        
         true_c = true[..., 0]
         pred_c = (pred[..., 0] >= 0.5).float()
-
         B, N, _ = true.shape
         device = true.device
-
         cell_index = torch.arange(N, device=device).float()
         cell_index = cell_index.unsqueeze(0).expand(B, -1)
-
         true_x = (cell_index + true[..., 1]) / self.n_cells * self.max_signal_length
         pred_x = (cell_index + pred[..., 1]) / self.n_cells * self.max_signal_length
-
         true_w = true[..., 2] * self.anchors[0] * self.max_signal_length
         pred_w = pred[..., 2] * self.anchors[0] * self.max_signal_length
-
         true_xmin = true_x - true_w / 2
         true_xmax = true_xmin + true_w
-
         pred_xmin = pred_x - pred_w / 2
         pred_xmax = pred_xmin + pred_w
-
         inter_xmin = torch.maximum(true_xmin, pred_xmin)
         inter_xmax = torch.minimum(true_xmax, pred_xmax)
         inter = torch.clamp(inter_xmax - inter_xmin, min=0)
-
         union = (true_xmax - true_xmin) + (pred_xmax - pred_xmin) - inter
         iou = inter / torch.clamp(union, min=1e-6)
-
         tp = true_c * pred_c * (iou >= self.iou_thresh).float()
         fp = (
             true_c * pred_c * (iou < self.iou_thresh).float()
             + (1.0 - true_c) * pred_c
         )
-
         self.tp += tp.sum().item()
         self.fp += fp.sum().item()
-
+    
     def compute(self):
         return self.tp / max(self.tp + self.fp, 1.0)
 
@@ -105,59 +98,106 @@ class SignalTester:
     def __init__(self, model, device, threshold=0.5):
         self.model = model.to(device)
         self.device = device
-        self.criterion = SignalLoss(w_pos=10.0, w_height=0.1, w_width=0.5)
+        self.criterion = SignalLoss()
         self.threshold = threshold
     
     def test(self, dataloader):
         self.model.eval()
-        test_metrics = SignalMetrics()
+        test_metrics = SignalMetrics(
+            n_cells=32, 
+            max_signal_length=1024, 
+            anchors=[1.0], 
+            iou_thresh=0.5
+        )
         
         all_pred_pos = []
         all_true_pos = []
-
+        
+        total_loss = 0.0
+        total_loss_pos = 0.0
+        total_loss_height = 0.0
+        total_loss_width = 0.0
+        num_batches = 0
+        
+        n_cells = 32
+        max_signal_length = 1024
+        cell_size = max_signal_length // n_cells
+        
         with torch.no_grad():
             for batch in dataloader:
                 signal = batch["signal"].to(self.device)
                 peaks = batch["peaks"].to(self.device)
-
+                n_peaks = batch["n_peaks"].to(self.device)
+                
                 pred_pos, pred_height, pred_width = self.model(signal.unsqueeze(1))
-
-                # Convert peaks continui in pos / height / width tensors
+                
+                pred_pos = pred_pos.squeeze(1)
+                pred_height = pred_height.squeeze(1)
+                pred_width = pred_width.squeeze(1)
+                
                 true_pos = torch.zeros_like(pred_pos)
-                true_height = torch.zeros(pred_height.shape, device=self.device)
-                true_width = torch.zeros(pred_width.shape, device=self.device)
-
+                true_height = torch.zeros_like(pred_height)
+                true_width = torch.zeros_like(pred_width)
+                
                 for i, p in enumerate(peaks):
-                    for j in range(p.shape[0]):
-                        idx = int(round(p[j, 0].item()))
-                        if 0 <= idx < true_pos.shape[1]:
-                            true_pos[i, idx] = 1.0
-                            true_height[i, j] = p[j, 1]
-                            true_width[i, j] = p[j, 2]
-
-                # Compute loss
-                loss, loss_dict = self.criterion(pred_pos, pred_height, pred_width,
-                                                 true_pos, true_height, true_width)
-
-                test_metrics.update(loss.item(), loss_dict)
-
+                    num_peaks_i = n_peaks[i].item()
+                    if num_peaks_i == 0:
+                        continue
+                    if p.dim() == 1:
+                        p = p.unsqueeze(0)
+                    for j in range(min(num_peaks_i, p.shape[0])):
+                        if p.shape[-1] < 3:
+                            continue
+                        
+                        peak_position = p[j, 0].item()
+                        cell_idx = int(peak_position / max_signal_length * n_cells)
+                        
+                        if 0 <= cell_idx < true_pos.shape[1]:
+                            true_pos[i, cell_idx] = 1.0
+                            true_height[i, cell_idx] = p[j, 1]
+                            true_width[i, cell_idx] = p[j, 2]
+                
+                pred = torch.stack([pred_pos, pred_height, pred_width], dim=-1)
+                true = torch.stack([true_pos, true_height, true_width], dim=-1)
+                
+                loss = self.criterion(true, pred)
+                
+                error = (true - pred) ** 2
+                loss_dict = {
+                    'pos': error[..., 0].mean().item(),
+                    'height': error[..., 1].mean().item(),
+                    'width': error[..., 2].mean().item()
+                }
+                
+                test_metrics.update(true, pred)
+                
+                total_loss += loss.item()
+                total_loss_pos += loss_dict['pos']
+                total_loss_height += loss_dict['height']
+                total_loss_width += loss_dict['width']
+                num_batches += 1
+                
                 all_pred_pos.append((pred_pos > self.threshold).cpu().numpy())
                 all_true_pos.append(true_pos.cpu().numpy())
-
-        # Flatten for global metrics
-        pred_flat = np.concatenate(all_pred_pos).flatten()
-        true_flat = np.concatenate(all_true_pos).flatten()
-
+        
+        avg_loss = total_loss / num_batches
+        avg_details = {
+            'pos': total_loss_pos / num_batches,
+            'height': total_loss_height / num_batches,
+            'width': total_loss_width / num_batches
+        }
+        
+        pred_flat = np.concatenate([p.flatten() for p in all_pred_pos])
+        true_flat = np.concatenate([t.flatten() for t in all_true_pos])
+        
         precision = precision_score(true_flat, pred_flat, zero_division=0)
         recall = recall_score(true_flat, pred_flat, zero_division=0)
         f1 = f1_score(true_flat, pred_flat, zero_division=0)
-
-        avg_loss, avg_details, _, _, _ = test_metrics.avg()
-
+        
         print(f"[TEST RESULTS]")
         print(f"Loss: {avg_loss:.4f} (pos={avg_details['pos']:.4f}, h={avg_details['height']:.4f}, w={avg_details['width']:.4f})")
         print(f"Precision: {precision:.4f} | Recall: {recall:.4f} | F1: {f1:.4f}")
-
+        
         return avg_loss, precision, recall, f1
 
 
@@ -172,24 +212,17 @@ class SignalTrainer:
         self.threshold = threshold
         self.patience = patience
 
-        # Model
         self.model = PeakDetectionModel().to(self.device)
-
-        # Loss
         self.criterion = SignalLoss()
-
-        # Optimizer
         self.optimizer = optim.Adam(self.model.parameters(), lr=lr)
         self.scheduler = optim.lr_scheduler.ReduceLROnPlateau(
             self.optimizer, mode='min', factor=0.5, patience=3
         )
 
-        # Early stopping
         self.best_val_loss = float("inf")
         self.best_val_f1 = 0.0
         self.early_stop_counter = 0
 
-        # History
         self.history = {
             'train_loss': [], 'val_loss': [],
             'train_f1': [], 'val_f1': [],
@@ -207,7 +240,6 @@ class SignalTrainer:
             if self.val_loader:
                 val_loss, val_precision, val_recall, val_f1 = self._validate_epoch(epoch)
 
-                # Update history
                 self.history['train_loss'].append(train_loss)
                 self.history['val_loss'].append(val_loss)
                 self.history['train_f1'].append(train_f1)
@@ -216,10 +248,8 @@ class SignalTrainer:
                 self.history['val_recall'].append(val_recall)
                 self.history['learning_rates'].append(self.optimizer.param_groups[0]['lr'])
 
-                # Scheduler step
                 self.scheduler.step(val_loss)
 
-                # Early stopping
                 if val_loss < self.best_val_loss:
                     self.best_val_loss = val_loss
                     self.best_val_f1 = val_f1
@@ -238,65 +268,103 @@ class SignalTrainer:
         print(f"Training finished. Best val loss: {self.best_val_loss:.4f}, Best val F1: {self.best_val_f1:.4f}")
         self._save_history()
 
-    # -------------------------------
-    # Training step
-    # -------------------------------
     def _train_epoch(self, epoch):
         self.model.train()
         metrics = SignalMetrics(
-        n_cells=32, 
-        max_signal_length=1024, 
-        anchors=[1.0], 
-        iou_thresh=0.5
-    )
+            n_cells=32, 
+            max_signal_length=1024, 
+            anchors=[1.0], 
+            iou_thresh=0.5
+        )
 
         all_pred_pos = []
         all_true_pos = []
+        
+        total_loss = 0.0
+        total_loss_pos = 0.0
+        total_loss_height = 0.0
+        total_loss_width = 0.0
+        num_batches = 0
+        
+        n_cells = 32
+        max_signal_length = 1024
+        cell_size = max_signal_length // n_cells
 
         for batch_idx, batch in enumerate(self.train_loader):
             signal = batch["signal"].to(self.device)
             peaks = batch["peaks"].to(self.device)
+            signal_lengths = batch["signal_lengths"].to(self.device)
+            n_peaks = batch["n_peaks"].to(self.device)
 
-            # Forward
             pred_pos, pred_height, pred_width = self.model(signal.unsqueeze(1))
+            
+            pred_pos = pred_pos.squeeze(1)
+            pred_height = pred_height.squeeze(1)
+            pred_width = pred_width.squeeze(1)
 
-            # Prepare targets: if using SignalLoss, split peaks into pos, height, width
-            # Here we assume peaks are already aligned to max_peaks
             true_pos = torch.zeros_like(pred_pos)
-            true_height = torch.zeros(pred_height.shape, device=self.device)
-            true_width = torch.zeros(pred_width.shape, device=self.device)
+            true_height = torch.zeros_like(pred_height)
+            true_width = torch.zeros_like(pred_width)
 
-            # Fill in true_pos / true_height / true_width from peaks
             for i, p in enumerate(peaks):
-                for j in range(p.shape[0]):
-                    idx = int(round(p[j, 0].item()))
-                    if 0 <= idx < true_pos.shape[1]:
-                        true_pos[i, idx] = 1.0
-                        true_height[i, j] = p[j, 1]
-                        true_width[i, j] = p[j, 2]
+                num_peaks = n_peaks[i].item() 
+                if num_peaks == 0:
+                    continue
+                if p.dim() == 1:
+                    p = p.unsqueeze(0)
+                
+                for j in range(min(num_peaks, p.shape[0])):
+                    if p.shape[-1] < 3:
+                        continue
+                    
+                    peak_position = p[j, 0].item()
+                    cell_idx = int(peak_position / max_signal_length * n_cells)
+                    
+                    if 0 <= cell_idx < true_pos.shape[1]:
+                        true_pos[i, cell_idx] = 1.0
+                        true_height[i, cell_idx] = p[j, 1]
+                        true_width[i, cell_idx] = p[j, 2]
 
-            # Compute loss
-            loss, loss_dict = self.criterion(pred_pos, pred_height, pred_width,
-                                             true_pos, true_height, true_width)
+            pred = torch.stack([pred_pos, pred_height, pred_width], dim=-1)
+            true = torch.stack([true_pos, true_height, true_width], dim=-1)
 
-            # Backward
+            loss = self.criterion(true, pred)
+            
+            with torch.no_grad():
+                error = (true - pred) ** 2
+                loss_dict = {
+                    'pos': error[..., 0].mean().item(),
+                    'height': error[..., 1].mean().item(),
+                    'width': error[..., 2].mean().item()
+                }
+
             self.optimizer.zero_grad()
             loss.backward()
             self.optimizer.step()
 
-            metrics.update(loss.item(), loss_dict)
+            metrics.update(true, pred)
+            
+            total_loss += loss.item()
+            total_loss_pos += loss_dict['pos']
+            total_loss_height += loss_dict['height']
+            total_loss_width += loss_dict['width']
+            num_batches += 1
 
-            # Collect predictions for F1
             all_pred_pos.append((pred_pos > self.threshold).detach().cpu().numpy())
             all_true_pos.append(true_pos.cpu().numpy())
 
             if batch_idx % 50 == 0:
                 print(f"[Epoch {epoch:2d} | Batch {batch_idx:3d}] Loss: {loss.item():.4f}")
 
-        # Average metrics
-        avg_loss, avg_details, _, _, _ = metrics.avg()
-        pred_flat = np.concatenate(all_pred_pos).flatten()
-        true_flat = np.concatenate(all_true_pos).flatten()
+        avg_loss = total_loss / num_batches
+        avg_details = {
+            'pos': total_loss_pos / num_batches,
+            'height': total_loss_height / num_batches,
+            'width': total_loss_width / num_batches
+        }
+        
+        pred_flat = np.concatenate([p.flatten() for p in all_pred_pos])
+        true_flat = np.concatenate([t.flatten() for t in all_true_pos])
         train_f1 = f1_score(true_flat, pred_flat, zero_division=0)
 
         print(f"\nEpoch {epoch} | Train Loss: {avg_loss:.4f} | F1: {train_f1:.4f}")
@@ -304,45 +372,94 @@ class SignalTrainer:
 
         return avg_loss, train_f1
 
-    # -------------------------------
-    # Validation step
-    # -------------------------------
     def _validate_epoch(self, epoch):
         self.model.eval()
-        metrics = SignalMetrics()
+        metrics = SignalMetrics(
+            n_cells=32, 
+            max_signal_length=1024, 
+            anchors=[1.0], 
+            iou_thresh=0.5
+        )
 
         all_pred_pos = []
         all_true_pos = []
+        
+        total_loss = 0.0
+        total_loss_pos = 0.0
+        total_loss_height = 0.0
+        total_loss_width = 0.0
+        num_batches = 0
+        
+        n_cells = 32
+        max_signal_length = 1024
+        cell_size = max_signal_length // n_cells
 
         with torch.no_grad():
             for batch in self.val_loader:
                 signal = batch["signal"].to(self.device)
                 peaks = batch["peaks"].to(self.device)
+                n_peaks = batch["n_peaks"].to(self.device)
 
                 pred_pos, pred_height, pred_width = self.model(signal.unsqueeze(1))
+                
+                pred_pos = pred_pos.squeeze(1)
+                pred_height = pred_height.squeeze(1)
+                pred_width = pred_width.squeeze(1)
 
                 true_pos = torch.zeros_like(pred_pos)
-                true_height = torch.zeros(pred_height.shape, device=self.device)
-                true_width = torch.zeros(pred_width.shape, device=self.device)
+                true_height = torch.zeros_like(pred_height)
+                true_width = torch.zeros_like(pred_width)
 
                 for i, p in enumerate(peaks):
-                    for j in range(p.shape[0]):
-                        idx = int(round(p[j, 0].item()))
-                        if 0 <= idx < true_pos.shape[1]:
-                            true_pos[i, idx] = 1.0
-                            true_height[i, j] = p[j, 1]
-                            true_width[i, j] = p[j, 2]
+                    num_peaks = n_peaks[i].item()
+                    if num_peaks == 0:
+                        continue
+                    if p.dim() == 1:
+                        p = p.unsqueeze(0)
+                    for j in range(min(num_peaks, p.shape[0])):
+                        if p.shape[-1] < 3:
+                            continue
+                        
+                        peak_position = p[j, 0].item()
+                        cell_idx = int(peak_position / max_signal_length * n_cells)
+                        
+                        if 0 <= cell_idx < true_pos.shape[1]:
+                            true_pos[i, cell_idx] = 1.0
+                            true_height[i, cell_idx] = p[j, 1]
+                            true_width[i, cell_idx] = p[j, 2]
 
-                loss, loss_dict = self.criterion(pred_pos, pred_height, pred_width,
-                                                 true_pos, true_height, true_width)
+                pred = torch.stack([pred_pos, pred_height, pred_width], dim=-1)
+                true = torch.stack([true_pos, true_height, true_width], dim=-1)
 
-                metrics.update(loss.item(), loss_dict)
+                loss = self.criterion(true, pred)
+                
+                error = (true - pred) ** 2
+                loss_dict = {
+                    'pos': error[..., 0].mean().item(),
+                    'height': error[..., 1].mean().item(),
+                    'width': error[..., 2].mean().item()
+                }
+
+                metrics.update(true, pred)
+                
+                total_loss += loss.item()
+                total_loss_pos += loss_dict['pos']
+                total_loss_height += loss_dict['height']
+                total_loss_width += loss_dict['width']
+                num_batches += 1
+                
                 all_pred_pos.append((pred_pos > self.threshold).cpu().numpy())
                 all_true_pos.append(true_pos.cpu().numpy())
 
-        avg_loss, avg_details, _, _, _ = metrics.avg()
-        pred_flat = np.concatenate(all_pred_pos).flatten()
-        true_flat = np.concatenate(all_true_pos).flatten()
+        avg_loss = total_loss / num_batches
+        avg_details = {
+            'pos': total_loss_pos / num_batches,
+            'height': total_loss_height / num_batches,
+            'width': total_loss_width / num_batches
+        }
+        
+        pred_flat = np.concatenate([p.flatten() for p in all_pred_pos])
+        true_flat = np.concatenate([t.flatten() for t in all_true_pos])
 
         precision = precision_score(true_flat, pred_flat, zero_division=0)
         recall = recall_score(true_flat, pred_flat, zero_division=0)
@@ -353,9 +470,6 @@ class SignalTrainer:
 
         return avg_loss, precision, recall, f1
 
-    # -------------------------------
-    # Checkpoint
-    # -------------------------------
     def _save_checkpoint(self, epoch, val_loss, val_f1, is_best=False):
         checkpoint_dir = "networks/checkpoints"
         os.makedirs(checkpoint_dir, exist_ok=True)
@@ -375,9 +489,6 @@ class SignalTrainer:
             torch.save(checkpoint, path)
             print(f"Saved best model: epoch {epoch}, val_loss={val_loss:.4f}, F1={val_f1:.4f}")
 
-    # -------------------------------
-    # Save history
-    # -------------------------------
     def _save_history(self):
         history_dir = "networks/history"
         os.makedirs(history_dir, exist_ok=True)

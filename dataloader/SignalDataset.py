@@ -48,4 +48,41 @@ class SignalDataset(Dataset):
             "signal": torch.from_numpy(signal),
             "peaks": torch.from_numpy(peaks)
         }
+    
+
+
+def collate_fn(batch):
+    """Custom collate function to handle variable-length signals and peaks."""
+    signals = [item["signal"] for item in batch]
+    peaks_list = [item["peaks"] for item in batch]
+    
+    # Pad signals to max length in batch
+    max_signal_len = max(s.size(0) for s in signals)
+    padded_signals = torch.zeros(len(signals), max_signal_len)
+    signal_lengths = torch.zeros(len(signals), dtype=torch.long)
+    
+    for i, s in enumerate(signals):
+        length = s.size(0)
+        padded_signals[i, :length] = s
+        signal_lengths[i] = length
+    
+    # Pad peaks to max number in batch
+    max_peaks = max(p.size(0) for p in peaks_list)
+    if max_peaks == 0:
+        max_peaks = 1  # Evita errori con batch senza picchi
+    
+    padded_peaks = torch.zeros(len(peaks_list), max_peaks, 3)
+    n_peaks = torch.zeros(len(peaks_list), dtype=torch.long)
+    
+    for i, p in enumerate(peaks_list):
+        if p.size(0) > 0:
+            padded_peaks[i, :p.size(0), :] = p
+            n_peaks[i] = p.size(0)
+    
+    return {
+        "signal": padded_signals,
+        "peaks": padded_peaks,
+        "signal_lengths": signal_lengths,
+        "n_peaks": n_peaks
+    }
 
