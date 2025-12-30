@@ -12,6 +12,9 @@ notebooks/covision_task.ipynb
 dataloader/__pycache__
 dataloader/__pycache__/*
 
+downloader/__pycache__
+downloader/__pycache__/*
+
 trainer/__pycache__
 trainer/__pycache__/*
 
