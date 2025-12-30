@@ -1,7 +1,10 @@
 task_covisionlab.pdf
 .venv
 
+networks/checkpoints/
 network/checkpoints/*
+
+network/history
 network/history/*
 
 notebooks/covision_task.ipynb
