@@ -6,6 +6,12 @@ network/history/*
 
 notebooks/covision_task.ipynb
 
+dataloader/__pycache__
+dataloader/__pycache__/*
+
+trainer/__pycache__
+trainer/__pycache__/*
+
 __pycache__
 __pycache__/*
 
