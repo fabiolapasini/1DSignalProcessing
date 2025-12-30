@@ -4,6 +4,10 @@ task_covisionlab.pdf
 network/checkpoints/*
 network/history/*
 
-__pycache__/
+notebooks/covision_task.ipynb
+
+__pycache__
+__pycache__/*
+
 *.py[cod]
 *$py.class
