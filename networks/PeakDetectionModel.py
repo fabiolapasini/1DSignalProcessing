@@ -1,7 +1,6 @@
 import torch
 import torch.nn as nn
 
-
 class PeakDetectionModel(nn.Module):
     """
     1D CNN for peak detection in signals.
@@ -20,6 +19,8 @@ class PeakDetectionModel(nn.Module):
             nn.MaxPool1d(kernel_size=2, ceil_mode=True),
         )
         
+        self.encoder[0].name = "entry_layer"
+        
         with torch.no_grad():
             dummy = torch.zeros(1, 1, signal_length)
             out = self.encoder(dummy)
@@ -33,6 +34,10 @@ class PeakDetectionModel(nn.Module):
         self.fc_positions = nn.Linear(2048, signal_length)
         self.fc_heights = nn.Linear(2048, max_peaks)
         self.fc_widths = nn.Linear(2048, max_peaks)
+        
+        self.fc_positions.name = "final_layer_positions"
+        self.fc_heights.name = "final_layer_heights"
+        self.fc_widths.name = "final_layer_widths"
     
     def forward(self, x):
         x = self.encoder(x)
