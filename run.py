@@ -1,6 +1,8 @@
 import argparse
 import torch
 import os 
+import onnx
+import onnxruntime
 from torch.utils.data import DataLoader, random_split
 from dataloader.SignalDataset import SignalDataset
 from trainer.SignalTrainer import SignalTrainer, SignalTester
@@ -81,6 +83,31 @@ def main():
     print("Saving the final model...")
     torch.save(trainer.model.state_dict(), checkpoint_path)
     print(f"✅ Model saved at {checkpoint_path}")
+
+    # EXPORT TO ONNX
+    # ============================================================
+    torch_model = trainer.model
+    torch_model.eval()  # disable dropout / batchnorm training mode
+    torch_model.cpu()
+
+    example_inputs = (torch.randn(1, 1, torch_model.signal_length),)
+    onnx_path = os.path.join(checkpoint_dir, "peak_detection_model.onnx")
+    onnx_program = torch.onnx.export(
+        torch_model,
+        example_inputs,
+        onnx_path,
+        input_names=["input"],
+        output_names=["positions", "heights", "widths"],
+        opset_version=17
+    )
+    onnx_program.save(onnx_path)
+    print(f"ONNX model saved to: {onnx_path}")
+
+    onnx_model = onnx.load(onnx_path)
+    onnx.checker.check_model(onnx_model)
+    print("ONNX model is valid ✅")
+    ort_session = onnxruntime.InferenceSession(onnx_path, providers=["CPUExecutionProvider"])
+    print("ONNX outputs:", [o.name for o in ort_session.get_outputs()])
 
 if __name__ == "__main__":
     main()
