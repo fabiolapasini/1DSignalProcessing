@@ -2,9 +2,9 @@ task_covisionlab.pdf
 .venv
 
 networks/checkpoints/
-network/checkpoints/*
-network/peak_detection_model.trt
-network/net.trt
+networks/checkpoints/*
+networks/peak_detection_model.trt
+networks/net.trt
 
 network/history
 network/history/*
