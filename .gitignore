@@ -5,6 +5,7 @@ networks/checkpoints/
 networks/checkpoints/*
 networks/peak_detection_model.trt
 networks/net.trt
+networks/final_model.pt
 
 network/history
 network/history/*
