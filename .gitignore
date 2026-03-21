@@ -3,6 +3,7 @@ task_covisionlab.pdf
 
 networks/checkpoints/
 network/checkpoints/*
+network/net.trt
 
 network/history
 network/history/*
