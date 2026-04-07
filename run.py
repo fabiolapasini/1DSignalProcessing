@@ -7,6 +7,8 @@ from torch.utils.data import DataLoader, random_split
 from dataloader.SignalDataset import SignalDataset
 from trainer.SignalTrainer import SignalTrainer, SignalTester
 
+SPLIT = 42
+
 def argparse_config():
     parser = argparse.ArgumentParser(
         description="Run SignalDataset loading and training."
@@ -19,6 +21,7 @@ def argparse_config():
     parser.add_argument("--train_split", type=float, default=0.75, help="Train split ratio.")
     parser.add_argument("--val_split", type=float, default=0.15, help="Validation split ratio.")
     parser.add_argument("--epochs", type=int, default=20, help="Number of training epochs.")
+    parser.add_argument("--save_test_data", action="store_true", help="Save test set")
     return parser.parse_args()
 
 # ----------------------- PREPARE DATASET FUNCTION -----------------------
@@ -39,15 +42,19 @@ def prepare_dataset(args):
     train_dataset, val_dataset, test_dataset = random_split(
         dataset,
         [train_size, val_size, test_size],
-        generator=torch.Generator().manual_seed(42)
+        generator=torch.Generator().manual_seed(SPLIT)
     )
+
+    if (args.save_test_data):
+        torch.save(test_dataset, "data\\test_dataset.pt")
     
     train_loader = DataLoader(train_dataset, batch_size=args.batch_size, shuffle=True, num_workers=0)
     val_loader = DataLoader(val_dataset, batch_size=args.batch_size, shuffle=False, num_workers=0)
     test_loader = DataLoader(test_dataset, batch_size=args.batch_size, shuffle=False, num_workers=0)
     
     print(f"[INFO] Train set: {len(train_dataset)} | Val set: {len(val_dataset)} | Test set: {len(test_dataset)}")
-    return train_loader, val_loader, test_loader
+    return train_loader, val_loader, test_loader 
+
 
 # ----------------------- MAIN ENTRY POINT -----------------------
 def main():

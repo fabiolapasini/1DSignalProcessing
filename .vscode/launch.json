@@ -19,7 +19,8 @@
                 "--batch_size", "32",
                 "--train_split", "0.75",
                 "--val_split", "0.15",
-                "--epochs", "20"
+                "--epochs", "20",
+                "--save_test_data"
             ]
         }
     ]
