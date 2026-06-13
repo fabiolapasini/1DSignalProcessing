@@ -46,7 +46,14 @@ def prepare_dataset(args):
     )
 
     if (args.save_test_data):
-        torch.save(test_dataset, "data\\test_dataset.pt")
+        torch.save(test_dataset.indices, "data/test_indices.pt")
+        torch.save({
+            "indices": test_dataset.indices,
+            "chunks": args.chunks,
+            "max_peaks": args.max_peaks,
+            "signal_path": args.signal_path,
+            "info_path": args.info_path
+        }, "data/test_split.pt")
     
     train_loader = DataLoader(train_dataset, batch_size=args.batch_size, shuffle=True, num_workers=0)
     val_loader = DataLoader(val_dataset, batch_size=args.batch_size, shuffle=False, num_workers=0)
