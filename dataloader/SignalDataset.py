@@ -18,7 +18,7 @@ class SignalDataset(Dataset):
     
     def _load_signals(self) -> np.ndarray:
         with open(self.signal_path, "rb") as f:
-            signal_data = np.fromfile(f, dtype=np.uint8)
+            signal_data = np.fromfile(f, dtype=np.uint8) # float32
             signal_data = signal_data.reshape(-1, self.chunks).astype(np.float32)
         return signal_data
     
@@ -34,6 +34,15 @@ class SignalDataset(Dataset):
     def __getitem__(self, idx):
         signal = self.signal_data[idx].copy()
         info = self.info_data[idx].copy()
+
+        '''
+        "signal_id": signal_id,
+        "length": length,
+        "n_peaks": n_peaks,
+        "pos_1": None, "height_1": None, "width_1": None,
+        "pos_2": None, "height_2": None, "width_2": None,
+        "pos_3": None, "height_3": None, "width_3": None
+        '''
         
         num_peaks = min(int(info[1]), self.max_peaks) 
         peak_pos = torch.zeros(self.chunks, dtype=torch.float32)

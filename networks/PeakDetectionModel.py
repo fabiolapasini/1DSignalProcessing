@@ -45,7 +45,7 @@ class PeakDetectionModel(nn.Module):
         x = self.fc(x)
         
         positions = torch.sigmoid(self.fc_positions(x))
-        heights = torch.relu(self.fc_heights(x))
+        heights = torch.relu(self.fc_heights(x))    # if neg values, remove!
         widths = torch.relu(self.fc_widths(x))
         
         return positions, heights, widths
